@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>One Brain Player</title>
+<style>html,body{margin:0;height:100%;background:#000;overflow:hidden}#p,#p iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+#msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#bbb;font:14px system-ui,sans-serif;text-align:center;padding:16px}</style>
+</head><body><div id="p"></div><div id="msg" hidden></div>
+<script>
+/* One Brain's YouTube player. One Brain opens this page inside the app (?v=ID or ?list=ID) and drives it with
+   postMessage, so YouTube sees a real https website as the player's address. */
+(function(){
+'use strict';
+var Q=new URLSearchParams(location.search),P=null,ready=false,last=-9,host=window.parent!==window?window.parent:null;
+function n(k,d){var x=parseFloat(Q.get(k));return isFinite(x)?x:d;}
+function send(o){if(!host)return;o.obyt=1;try{host.postMessage(o,'*');}catch(e){}}
+function info(){var o={ev:'tick'};try{o.t=P.getCurrentTime();o.d=P.getDuration();o.lf=P.getVideoLoadedFraction();o.s=P.getPlayerState();o.r=P.getPlaybackRate();o.vol=P.getVolume();o.mu=P.isMuted();}catch(e){}return o;}
+var vid=Q.get('v')||'',list=Q.get('list')||'',pl=Q.get('playlist')||'';
+var pv={playsinline:1,rel:0,modestbranding:1,iv_load_policy:3,enablejsapi:1,origin:location.origin,autoplay:Q.get('autoplay')==='0'?0:1};
+['controls','disablekb','fs','loop','mute','cc_load_policy','start','end','hl','cc_lang_pref'].forEach(function(k){if(Q.has(k))pv[k]=k==='hl'||k==='cc_lang_pref'?Q.get(k):n(k,0);});
+if(list){pv.listType='playlist';pv.list=list;}if(pl)pv.playlist=pl;
+if(!/^[\w-]{11}$/.test(vid)&&!list){var m=document.getElementById('msg');m.textContent='One Brain Player is ready.';m.hidden=false;send({ev:'hello'});return;}
+window.onYouTubeIframeAPIReady=function(){
+  P=new YT.Player('p',{videoId:/^[\w-]{11}$/.test(vid)?vid:undefined,host:Q.get('nc')==='1'?'https://www.youtube-nocookie.com':undefined,playerVars:pv,
+    events:{onReady:function(){ready=true;send({ev:'ready',rates:(P.getAvailablePlaybackRates&&P.getAvailablePlaybackRates())||[]});send(info());},
+      onStateChange:function(x){send({ev:'state',data:x.data});send(info());},
+      onError:function(x){send({ev:'error',data:x.data});},
+      onPlaybackRateChange:function(x){send({ev:'rate',data:x.data});},
+      onApiChange:function(){send({ev:'api'});}}});
+  setInterval(function(){if(ready)send(info());},250);
+};
+/* commands: {obyt:1,f:'playVideo',a:[...]} from One Brain, or YouTube's own {"event":"command","func":...} format */
+window.addEventListener('message',function(e){var d=e.data;if(typeof d==='string'){try{d=JSON.parse(d);}catch(x){return;}}if(!d)return;
+  var f=d.obyt?d.f:(d.event==='command'?d.func:null),a=d.obyt?(d.a||[]):(d.args||[]);if(!f||!P||!ready)return;
+  if(!/^(playVideo|pauseVideo|stopVideo|seekTo|setPlaybackRate|setVolume|mute|unMute|loadModule|unloadModule|setOption|nextVideo|previousVideo|playVideoAt|loadVideoById|cueVideoById|setSize|setLoop|setShuffle|setPlaybackQuality)$/.test(f))return;
+  try{P[f].apply(P,a);}catch(x){}send(info());});
+send({ev:'hello'});
+var s=document.createElement('script');s.src='https://www.youtube.com/iframe_api';s.onerror=function(){send({ev:'error',data:'api'});};document.head.appendChild(s);
+})();
+</script>
+</body></html>
